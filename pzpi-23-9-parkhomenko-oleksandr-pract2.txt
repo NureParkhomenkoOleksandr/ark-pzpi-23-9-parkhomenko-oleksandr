@@ -1,0 +1,404 @@
+﻿Міністерство освіти і науки України
+Харківський національний університет радіоелектроніки
+Кафедра програмної інженерії
+
+
+
+
+
+Звіт
+до практичного завдання №2
+з дисципліни «Аналіз та рефакторинг коду»
+на тему: «Застосування методів рефакторингу коду: Replace Type Code with State/Strategy, Replace Array with Object, Move Method»
+
+
+
+
+
+
+
+Виконав:
+ст. гр. ПЗПІ-23-9
+Пархоменко Олександр Андрійович
+
+                     Перевірив:
+                     ст. викладач кафедри ПІ
+                     Сокорчук Ігор Петрович	
+
+
+
+
+
+Харків 2025
+1 ІСТОРІЯ ЗМІН
+№
+Дата
+Версія звіту
+ Опис змін та виправлень
+1
+27.11.2025
+1
+Початкова версія документу, заповнення всіх розділів
+
+
+2 ЗАВДАННЯ
+1. Студент повинен обрати три методи рефакторингу коду із книги Мартіна Фаулера «Refactoring. Improving the Design of Existing Code». У даному випадку це наступні методи: Replace Type Code with State/Strategy, Replace Array with Object, Move Method.
+2. Навести приклади свого особистого коду (з курсових, лабораторних або інших проєктів), який потребує покращення, та продемонструвати застосування обраних методів. У якості проєкту було обрано тренувальний пет-проєкт «Recipe Book Management System».
+3. Кожен метод рефакторингу повинен супроводжуватись:
+o Описом проблеми, яку вирішує даний метод.
+o Кодом до і після застосування методу рефакторингу.
+o Поясненням переваг використаного методу.
+
+
+3 ОПИС ВИКОНАНОЇ РОБОТИ
+     3.1 Вступ 
+     Рефакторинг програмного коду є невід’ємною частиною сучасної розробки програмного забезпечення. У процесі розробки проєкту кодова база поступово ускладнюється, зростає кількість залежностей, і окремі концептні рішення можуть змінитися. Це призводить до сильного ускладення підтримки та зменшення гнучкості системи під час розробки функцій додатку.
+     Метою рефакторингу є покращення внутрішньої структури програмного коду без зміни його зовнішньої поведінки. Рефакторинг дозволяє зберігти свою функціональність, але у той же час покращити підтримку, швидкодію та гнучкість коду. Методи рефакторинга, описані у книзі «Refactoring. Improving the Design of Existing Code» від Мартіна Фаулера, дозволяють систематизувати процес покращення коду.
+     У рамках заняття було обрано три методи рефакторингу:
+* Replace Type Code with State/Strategy – заміна кодів типів окремими об’єктами зі специфічною поведінкою;
+* Replace Array with Object – заміна масивів на повноцінні об’єкти
+* Move Method – перенесення методу у клас, до якого він логічно належить
+     Кожен метод продемонстровано на прикладах з проєктом, із зазначенням проблеми, кодом до і після рефакторингу та поясненням переваг отриманого рішення.
+     У якості полігону для рефакторінгу було обрано самостійний проєкт «Інформаційна система керування книгами з рецептами» під скороченою назвою «RBMS»
+
+
+     3.2 Методи рефакторингу
+     3.2.1 Метод «Replace Type Code with State/Strategy»
+     3.2.1.1 Опис проблеми
+     У моделі Book тип книги зберігався як числове поле int Type зі значенням 1 = Public, 2 = Private, 3 = Draft. У сервісі логіка доступності книги для користувача реалізовувалася через набір if-перевірок.
+     Недоліки такого підходу:
+* використання «магічних чисел»(цілочисельна константа, яка використовується для ідентифікації, що може викликати непорозуміння) у коді;
+* логіка поведінки розмита по сервісах;
+* додавання нового типу книги потребує змін у багатьох місцях;
+* порушення принципу відкритості/закритості.
+     3.2.1.2 Код до рефакторингу
+1 public class Book
+2 {
+3     public required long Id { get; set; }
+4 
+5     public string? Title { get; set; }
+6 
+7     public string? Description { get; set; }
+8 
+9     public long AuthorId { get; set; }
+10 
+11     public virtual User? Author { get; set; }
+12 
+13     public virtual ICollection<Recipe>? Recipes { get; set; }
+14 
+15     // 1 = Public, 2 = Private, 3 = Draft
+16     public int Type { get; set; }
+17 }
+1 
+18 public class BookService : IBookService
+19 {
+20     public bool CanBeShownToUser(Book book, long? currentUserId)
+21     {
+22         if (book.Type == 1) // Public
+23             return true;
+24 
+25         if (book.Type == 2) // Private
+26             return currentUserId.HasValue && currentUserId.Value == book.AuthorId;
+27 
+28         if (book.Type == 3) // Draft
+29             return false;
+30 
+31         return false;
+32     }
+33 }
+     
+     3.2.1.3 Суть методу
+     Метод «Replace Type Code with State/Strategy» передбачає заміну коду на окрему ієрархію класів, де кожен клас описує поведінку певного типу. Це дозволяє позбутися умовних блоків, ізолювати логіку та зробити код більш розширюваним
+     3.2.1.4 Код після рефакторингу
+     Створюємо окремо ієрархію типів книги.
+1 public abstract class BookType
+2 {
+3     public abstract bool CanBeShownToUser(Book book, long? currentUserId);
+4 }
+5 public class DraftBookType : BookType
+6 {
+7     public override bool CanBeShownToUser(Book book, long? currentUserId)
+8     {
+9         return false;
+10     }
+11 }
+12 public class PrivateBookType : BookType
+13 {
+14     public override bool CanBeShownToUser(Book book, long? currentUserId)
+15     {
+16         if (currentUserId.HasValue && currentUserId.Value == book.AuthorId)
+17         {
+18             return true;
+19         }
+20         return false;
+21     }
+22 }
+23 
+24 public class PublicBookType : BookType
+25 {
+26     public override bool CanBeShownToUser(Book book, long? currentUserId)
+27     {
+28         return true;
+29     }
+30 }
+     
+     Оновлюємо модель Book.
+1 public class Book
+2 {
+3     public required long Id { get; set; }
+4     public string? Title { get; set; }
+5     public string? Description { get; set; }
+6 
+7     public long AuthorId { get; set; }
+8     public virtual User? Author { get; set; }
+9     public virtual ICollection<Recipe>? Recipes { get; set; }
+10 
+11     public BookType Type { get; set; } = new PublicBookType();
+12 }
+     
+     Спрощений сервіс BookService
+1 public class BookService : IBookService
+2 {
+3     public bool CanBeShownToUser(Book book, long? currentUserId)
+4     {
+5         return book.Type.CanBeShownToUser(book, currentUserId);
+6     }
+7 }
+     
+     3.2.1.5 Переваги
+     Після рефакторингу код став суттєво зрозумілішим і більш структурованимю. Використання «магічних чисел» було усунено, а поведінку різних типів книги інкапсульовано у відповідних класах. Тепер програма відповідає принципу відкритості/закритості, тому що додавання нового типу книги не потребує змін у вже наявному коді. Також зменшилася кількість умовних конструкцій, що робить код більш читабельним.
+     3.2.2 Метод «Replace Array with Object»
+     3.2.2.1 Опис проблеми
+     У початковій версії моделі Recipe інгредієнти у вигляді двовимірного масиву строк, де в першому стовпці містилась назва, а в другому – кількість. Такий формат є неявним і ненадійним, оскільки семантика індексів масиву неочевидна, а будь-яке порушення очікуваної структури даних може привести до непередбачених наслідків. Також через це модель складно розширювати, а код – важко читати та підтримувати
+     3.2.2.2 Код до рефакторингу
+1 public class Recipe
+2 {
+3     public required long Id { get; set; }
+4 
+5     public string? Title { get; set; }
+6 
+7     public string? Instructions { get; set; }
+8 
+9     public long BookId { get; set; }
+10 
+11     public virtual Book? Book { get; set; }
+12 
+13     // ingredients[i,0] = Name; ingredients[i,1] = Quantity
+14     public string[,] Ingredients { get; set; } = new string[0, 0];
+15 }
+
+     3.2.2.3 Суть методу
+     Метод «Replace Array with Object» передбачає заміну масиву, який неявно описує структуру даних, на окремий об’єкт із чітко визначеними полями. Це дозволяє уникнути залежності від індексів масиву та зробити модель зрозумілою й розширюваною.
+     3.2.2.4 Код після рефакторингу
+     Для застосування цього методу вводиться окрема сутність Ingredient.
+1 public class Ingredient
+2 {
+3     public long Id { get; set; }
+4     public string? Name { get; set; }
+5     public int Quantity { get; set; }
+6     public long RecipeId { get; set; }
+7 }
+
+     Оновлюємо модель Recipe
+1 public class Recipe
+2 {
+3     public long Id { get; set; }
+4     public string? Title { get; set; }
+5     public ICollection<Ingredient>? Ingredients { get; set; }
+6 }
+
+     3.2.2.5 Переваги
+     Після рефакторингу структура стала значно зрозумілішою, оскільки інформація про інгредієнти подається у вигляді окремих об’єктів із власними властивостями. Це усуває залежність від індексів масиву, покращує читабельність та дозволяє легко розширювати модель без ризику порушення логіки.
+     3.2.3 Метод «Move Method»
+     3.2.3.1 Опис проблеми
+     У сервісі користувачів було реалізовано метод FindUserByName(string name), який для пошуку користувача завантажував усіх користувачів із репозиторію за допомогою GetAllAsync(), а потім виконував фільтрацію в пам’яті. Такий підхід є неефективним з точки зору доступу до даних і порушує розподіл відповідальностей: логіка пошуку за критеріями «Clean Architecture» повинна бути зосереджена в репозиторії, а сервіс має лише координувати виклики. Це ускладнює підтримку коду та масштабування системи.
+     3.2.3.2 Код до рефакторингу
+     Інтерфейс сервісу користувачів:
+1 public interface IUserService
+2 {
+3     Task CreateUser(string username, string password);
+4     Task<IEnumerable<User>> ReadUsers();
+5     Task UpdateUser(User user);
+6     Task DeleteUser(int userID);
+7 
+8     Task<User> FindUserByName(string name);
+9 }
+
+
+     Репозиторій працює лише з базовими CRUD-операціями:
+1 public interface IUserRepository
+2 {
+3     Task<User?> GetByIdAsync(int id);
+4     Task<List<User>> GetAllAsync();
+5     Task AddAsync(User u);
+6     Task UpdateAsync(User u);
+7     Task DeleteAsync(int id);
+8 }
+
+     Реалізація методу у UserService до рефакторингу:
+1 public async Task<User> FindUserByName(string name)
+2 {
+3     var users = await _userRepository.GetAllAsync();
+4     var user = users.FirstOrDefault(u => u.Name == name);
+5 
+6     if (user == null)
+7         throw new KeyNotFoundException($"User '{name}' not found.");
+8 
+9     return user;
+10 }
+
+     3.2.3.3 Суть методу
+     Метод «Move Method» передбачає перенесення методу або його логіки до того класу, якому ця логіка фактично належить. У даному випадку операція пошуку користувача за ім’ям є частиною логіки доступу до даних, тому її потрібно реалізувати в репозиторії. Сервісний шар має лише викликати відповідний метод репозиторію та обробляти результат.
+     3.2.3.4 Код після рефакторингу
+     У інтерфейсі IUserRepository додається спеціалізований метод пошуку:
+1 public interface IUserRepository
+2 {
+3     Task<User?> GetByIdAsync(int id);
+4     Task<List<User>> GetAllAsync();
+5     Task AddAsync(User u);
+6     Task UpdateAsync(User u);
+7     Task DeleteAsync(int id);
+8 
+9     Task<User?> GetByNameAsync(string name);
+10 }
+
+     Реалізація в UserRepository:
+1 public async Task<User?> GetByNameAsync(string name)
+2 {
+3     return await _db.Users
+4         .FirstOrDefaultAsync(u => u.Name == name);
+5 }
+
+
+     Інтерфейс сервісу IUserService зберігає метод FindUserByName, але його реалізація тепер делегує пошук репозиторію:
+1 public interface IUserService
+2 {
+3     Task CreateUser(string username, string password);
+4     Task<IEnumerable<User>> ReadUsers();
+5     Task UpdateUser(User user);
+6     Task DeleteUser(int userID);
+7 
+8     Task<User> FindUserByName(string name);
+9 }
+     
+     Оновлений UserService:
+1 public async Task<User> FindUserByName(string name)
+2 {
+3     var user = await _userRepository.GetByNameAsync(name);
+4 
+5     if (user == null)
+6         throw new KeyNotFoundException($"User '{name}' not found.");
+7 
+8     return user;
+9 }
+     
+     3.2.3.5 Переваги
+     У результаті рефакторингу логіка пошуку користувача за ім’ям була перенесена в репозиторій, де знаходиться робота з базою. Сервісний шар став простішим і виконує лише координаційну роль, що відповідає принципам чистої архітектури. Пошук за ім’ям тепер здійснюється єдиним запитом замість завантаження всього списку користувачів, що підвищує швидкодію та читабельність коду.
+       
+3.3 Інструменти для рефакторингу у Visual Studio
+     Visual Studio є основним інструментом розробки для платформи .NET і містить вбудовану систему рефакторингу. Інструментарій цього середовища забезпечує безпечні зміни коду, оновлює посилання у проєкті та виконує статичний аналіз. Нижче наведені конкретні функції, які застосовуються у процесі рефакторингу
+     3.3.1. Автоматичне перейменування
+     Visual Studio дозволяє виконувати глобальне перейменування змінних, методів, класів та властивостей з повним оновленням усіх місць використання. Викликається через F2.
+     Цей інструмент часто допомагає при усуненні неправильних імен, при зміні структур моделей та DTO.
+     3.3.2. Виділення методу (Extract Method)
+     Це одна з найпоширеніших операцій рефакторингу, де Visual Studio автоматично виділяє вибраний фрагмент коду, створює новий метод, передає усі необхідні параметрі і замінює початковий код викликом нового методу. Викликається комбінацією «CTRL + R, M» або через «Швидкі Дії» 
+     3.3.3. Move to File – переміщення класу у новий файл
+     Visual Studio дозволяє автоматично перемістити клас, інтерфейс або перелік у окремий файл, що часто використовують у великих файлах із кількома класами.
+     3.3.4. Extract Interface, Extract Base Class
+     Visual Studio може автоматично створити інтерфейс на основі існуючого класу або базовий клас із частини логіки. Це часто використовують при роботі за SOLID принципами та абстракціями. Викликається через Quick Actions.
+     3.3.5. Move Member – переміщення членів класу
+     Середовище може переносити поля, властивості та методи в інший клас, якщо вони логічно належать іншій сутності.
+     3.3.6. Generate Constructor, Add Parameter
+     Visual Studio може автоматично додати параметр у конструктор, створити новий конструктор із потрібними полями та додати ініціалізацію. Це корисно, коли після рефакторингу моделі потрібно переробити конструктор класу.
+     3.3.7. Remove Unused Usings, Format Document
+     IDE може видалити невикористані імпорти, вирівняти код за стандартами, упорядкувати або за потребою додати «using». Це робить код більш гарним та читабельним.
+     
+     
+     
+     
+     
+     
+
+
+4 ВИСНОВКИ
+     У ході виконання роботи було досліджено та практично застосовано основні методи рефакторингу програмного коду, описані Мартіном Фаулером у книзі «Refactoring. Improving the Design of Existing Code». На прикладах навчального пет-проєкту було застосовано методи рефакторингу «Replace Type Code with State/Strategy», «Replace Array with Object» та «Move Method», та було продемонстровано різницю між варіантами коду. У процесі рефакторингу вдалося усунути надлишкові умовні блоки, замінити неявну структуру даних на клас, а також правильно розподілити відповідальності між класами до принципів чистої архітектури.
+      Також було розглянуто вбудовані у IDE Visual Studio інструменти для рефакторінгу, такі як: автоматичне перейменування, виділення методу, Move to File, Extract Interface/Base Class, переміщення членів класу, генерація конструктору та форматування використаних збірок або бібліотек у файлі.
+     У результаті виконаної роботи сформовано практичне розуміння того, як застосування рефакторингу сприяє підвищенню читабельності, швидкодії та довготривалої підтримуваності програмного коду. Отримані навички демонструють важливість вміння використовувати методи рефакторингу та інструменти середовища розробки, для того щоб більш ефективно оптимізувати код. 
+
+
+5 ВИКОРИСТАНІ ДЖЕРЕЛА
+     1. Extract a method - Visual Studio (Windows). Microsoft Learn: Build skills that open doors in your career. URL: https://learn.microsoft.com/en-us/visualstudio/ide/reference/extract-method?view=visualstudio (дата звернення: 27.11.2025).
+     2. Move Method. Refactoring and Design Patterns. URL: https://refactoring.guru/move-method (дата звернення: 27.11.2025).
+     3. Quick actions, light bulbs, and screwdrivers - Visual Studio (Windows). Microsoft Learn: Build skills that open doors in your career. URL: https://learn.microsoft.com/en-us/visualstudio/ide/quick-actions?view=visualstudio (дата звернення: 27.11.2025).
+     4. Refactoring for different programming languages - Visual Studio (Windows). Microsoft Learn: Build skills that open doors in your career. URL: https://learn.microsoft.com/en-us/visualstudio/ide/refactoring-in-visual-studio?view=visualstudio (дата звернення: 27.11.2025).
+     5. Refactoring: Improving the Design of Existing Code. Addison-Wesley Professional, 1999. 464 p.
+     6. Replace Array with Object. Refactoring and Design Patterns. URL: https://refactoring.guru/replace-array-with-object (дата звернення: 27.11.2025).
+     7. Replace Type Code with State/Strategy. Refactoring and Design Patterns. URL: https://refactoring.guru/replace-type-code-with-state-strategy (дата звернення: 27.11.2025).
+
+
+	ДОДАТОК А
+     А.1 Відеозапис
+	Відеозапис доповіді: https://youtu.be/odK1zIsdNTA.
+	Хронологічний опис відео:
+     00:00 – Назва теми доповіді 
+     00:11 – Вступна частина
+     00:56 – Обрані методи та тема проєкта
+     01:40 – Метод «Replace Type with State/Strategy», опис проблеми
+     02:25 – Метод «Replace Type with State/Strategy», рішення
+     03:07 – Метод «Replace Array with Object», опис проблеми
+     03:36 – Метод «Replace Array with Object», рішення
+     04:07 – Метод «Move Method», опис проблеми
+     04:43 – Метод «Move Method», рішення
+     05:24 – Покрокова демонстрація рефакторингу
+     06:07 – Інструменти рефакторингу Visual Studio
+     08:21 – Висновок
+     09:34 – Джерела
+
+ДОДАТОК Б
+	Б.1 Слайди презентації
+
+Рисунок Б.1 – Титульний слайд
+
+
+Рисунок Б.2 – Вступ
+
+ 
+Рисунок Б.3 – Використані методи та проєкт
+
+ 
+Рисунок Б.4 – Метод «Replace Type with State/Strategy», опис проблеми
+
+Рисунок Б.5 – Метод «Replace Type with State/Strategy», рішення
+
+
+Рисунок Б.6 – Метод «Replace Array with Object», опис проблеми
+
+Рисунок Б.7 – Метод «Replace Array with Object», рішення
+
+
+Рисунок Б.8 – Метод «Move Method», опис проблеми
+
+Рисунок Б.9 – Метод «Move Method», рішення
+
+
+Рисунок Б.10 – Покрокова демонстрація рефакторингу
+
+
+
+
+Рисунок Б.11 – Інструменти рефакторингу Visual Studio
+
+
+Рисунок Б.12 – Висновок
+
+
+Рисунок Б.13 – Список використаних джерел
+
+
+ДОДАТОК В
+     В.1 Програмний код
+     Посилання на репозиторій проєкту: https://github.com/BluffBatton/RBMS.git
+     
+
+
+
